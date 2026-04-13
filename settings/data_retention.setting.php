@@ -91,6 +91,27 @@ return [
     'description' => E::ts('Delete orphaned custom data records when the scheduled job runs.'),
     'default' => 0,
   ],
+  'data_retention_protect_default_org_contacts' => [
+    'name' => 'data_retention_protect_default_org_contacts',
+    'type' => 'Boolean',
+    'title' => E::ts('Protect Default Organisation related contacts'),
+    'description' => E::ts('When enabled, contacts with active relationships to the Default Organisation will be excluded from retention processing. The Default Organisation contact is always protected.'),
+    'default' => 1,
+  ],
+  'data_retention_excluded_contact_ids' => [
+    'name' => 'data_retention_excluded_contact_ids',
+    'type' => 'String',
+    'title' => E::ts('Excluded contact IDs'),
+    'description' => E::ts('Comma-separated list of contact IDs that should never be deleted by the retention policy. These contacts are protected in addition to the Default Organisation.'),
+    'default' => '',
+  ],
+  'data_retention_cms_user_handling' => [
+    'name' => 'data_retention_cms_user_handling',
+    'type' => 'String',
+    'title' => E::ts('CMS user account handling'),
+    'description' => E::ts('Control how contacts with linked CMS user accounts (Drupal, WordPress, etc.) are handled during retention processing. "Skip" will not delete contacts with CMS accounts. "Delete both" will delete the contact AND the CMS user account. "Delete contact only" will delete the contact but preserve the CMS user account (the link in civicrm_uf_match will be removed).'),
+    'default' => 'skip',
+  ],
   'data_retention_audit_log_years' => [
     'name' => 'data_retention_audit_log_years',
     'type' => 'Integer',

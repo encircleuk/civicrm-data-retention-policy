@@ -1,0 +1,576 @@
+<div class="crm-block crm-content-block">
+  <style>
+    .rollback-checkbox:checked + td,
+    tr:has(.rollback-checkbox:checked) {
+      background-color: #e8f4fc !important;
+    }
+    .crm-selection-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .crm-selection-actions .crm-button {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+    #rollback-form {
+      display: inline-block;
+    }
+    #btn-rollback-selected:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    tr.disabled td {
+      opacity: 0.6;
+    }
+  </style>
+  <div class="messages status no-popup">
+    <p><strong>{ts}Rollback Preview{/ts}</strong></p>
+    <p>{ts}Select the records you want to restore, then click "Rollback Selected". Records that have been permanently deleted cannot be restored.{/ts}</p>
+  </div>
+
+  {if $hasEntries}
+    <div class="crm-block crm-form-block" style="margin-bottom: 15px;">
+      <h3>{ts}Summary{/ts}</h3>
+      <table class="report-layout">
+        <tr>
+          <td><strong>{ts}Total records in audit log:{/ts}</strong></td>
+          <td>{$summary.total}</td>
+        </tr>
+        <tr>
+          <td><strong>{ts}Records that can be restored:{/ts}</strong></td>
+          <td><span style="color: #0a0;">{$summary.restorable}</span></td>
+        </tr>
+        <tr>
+          <td><strong>{ts}Records permanently deleted:{/ts}</strong></td>
+          <td><span style="color: #c00;">{$summary.permanently_deleted}</span></td>
+        </tr>
+        {if $hasActiveFilters}
+        <tr>
+          <td><strong>{ts}Records matching filters:{/ts}</strong></td>
+          <td><span style="color: #0073aa; font-weight: bold;">{$filteredCount}</span></td>
+        </tr>
+        {/if}
+      </table>
+    </div>
+
+    {* Selection actions bar *}
+    <div class="crm-selection-actions" style="margin-bottom: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px;">
+      <span id="selection-count" style="font-weight: bold;">0 {ts}selected{/ts}</span>
+      <button type="button" id="btn-select-all-visible" class="crm-button" style="margin-left: 15px;">
+        <i class="crm-i fa-check-square-o" aria-hidden="true"></i> {ts}Select All Visible{/ts}
+      </button>
+      <button type="button" id="btn-select-all-restorable" class="crm-button" style="margin-left: 5px;">
+        <i class="crm-i fa-check-square-o" aria-hidden="true"></i> {ts}Select All Restorable on Page{/ts}
+      </button>
+      <button type="button" id="btn-deselect-all" class="crm-button" style="margin-left: 5px;">
+        <i class="crm-i fa-square-o" aria-hidden="true"></i> {ts}Deselect All{/ts}
+      </button>
+    </div>
+
+    {* Pager - top *}
+    <div class="crm-pager" style="margin-bottom: 10px;">
+      <div class="crm-pager-row">
+        {* Rows per page selector *}
+        <span class="crm-pager-rpp">
+          <label for="rows-per-page">{ts}Rows per page{/ts}:</label>
+          <select id="rows-per-page" onchange="window.location.href='{$baseUrl}&rp=' + this.value + '&sort={$sort}&dir={$sortDir}&{$filterQueryString}';">
+            {foreach from=$allowedPageSizes item=size}
+              <option value="{$size}" {if $size == $rowsPerPage}selected{/if}>{$size}</option>
+            {/foreach}
+          </select>
+        </span>
+
+        {* Page info *}
+        <span class="crm-pager-nav">
+          {ts 1=$currentPage 2=$totalPages 3=$filteredCount}Page %1 of %2 (%3 records){/ts}
+        </span>
+
+        {* Page numbers *}
+        {if $totalPages > 1}
+          <span class="crm-pager-links">
+            {if $currentPage > 1}
+              <a href="{$baseUrl}&page={$currentPage-1}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-prev" title="{ts}Previous{/ts}">&lsaquo;</a>
+            {else}
+              <span class="crm-pager-prev disabled">&lsaquo;</span>
+            {/if}
+
+            {foreach from=$pageRange item=item}
+              {if $item.type == 'ellipsis'}
+                <span class="crm-pager-ellipsis">&hellip;</span>
+              {else}
+                {if $item.num == $currentPage}
+                  <span class="crm-pager-page current">{$item.num}</span>
+                {else}
+                  <a href="{$baseUrl}&page={$item.num}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-page">{$item.num}</a>
+                {/if}
+              {/if}
+            {/foreach}
+
+            {if $currentPage < $totalPages}
+              <a href="{$baseUrl}&page={$currentPage+1}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-next" title="{ts}Next{/ts}">&rsaquo;</a>
+            {else}
+              <span class="crm-pager-next disabled">&rsaquo;</span>
+            {/if}
+          </span>
+        {/if}
+
+        {* Clear filters *}
+        {if $hasActiveFilters}
+          <a href="{$baseUrl}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}" class="button crm-clear-filters">
+            <span><i class="crm-i fa-times" aria-hidden="true"></i> {ts}Clear Filters{/ts}</span>
+          </a>
+        {/if}
+      </div>
+    </div>
+
+    <form id="filter-form" method="get" action="{$baseUrl}">
+      <input type="hidden" name="reset" value="1" />
+      <input type="hidden" name="rp" value="{$rowsPerPage}" />
+      <input type="hidden" name="sort" value="{$sort}" />
+      <input type="hidden" name="dir" value="{$sortDir}" />
+
+      <div class="crm-block crm-form-block">
+        <table class="selector row-highlight crm-sortable-table crm-filterable-table">
+          <thead>
+            <tr class="columnheader">
+              {* Checkbox column *}
+              <th style="width: 30px; text-align: center;">
+                <input type="checkbox" id="select-all-checkbox" title="{ts}Select/Deselect All Visible{/ts}" />
+              </th>
+              {* Sortable column headers *}
+              <th class="crm-sortable {if $sort == 'entity_type'}sorted {$sortDir|lower}{/if}">
+                <a href="{$baseUrl}&page=1&rp={$rowsPerPage}&sort=entity_type&dir={if $sort == 'entity_type' && $sortDir == 'ASC'}DESC{else}ASC{/if}&{$filterQueryString}">
+                  {ts}Entity Type{/ts}
+                  {if $sort == 'entity_type'}
+                    <span class="crm-sort-icon">{if $sortDir == 'ASC'}&#x25B2;{else}&#x25BC;{/if}</span>
+                  {/if}
+                </a>
+              </th>
+              <th class="crm-sortable {if $sort == 'entity_id'}sorted {$sortDir|lower}{/if}">
+                <a href="{$baseUrl}&page=1&rp={$rowsPerPage}&sort=entity_id&dir={if $sort == 'entity_id' && $sortDir == 'ASC'}DESC{else}ASC{/if}&{$filterQueryString}">
+                  {ts}Record ID{/ts}
+                  {if $sort == 'entity_id'}
+                    <span class="crm-sort-icon">{if $sortDir == 'ASC'}&#x25B2;{else}&#x25BC;{/if}</span>
+                  {/if}
+                </a>
+              </th>
+              <th>{ts}Name{/ts}</th>
+              <th class="crm-sortable {if $sort == 'action_date'}sorted {$sortDir|lower}{/if}">
+                <a href="{$baseUrl}&page=1&rp={$rowsPerPage}&sort=action_date&dir={if $sort == 'action_date' && $sortDir == 'ASC'}DESC{else}ASC{/if}&{$filterQueryString}">
+                  {ts}Deleted On{/ts}
+                  {if $sort == 'action_date'}
+                    <span class="crm-sort-icon">{if $sortDir == 'ASC'}&#x25B2;{else}&#x25BC;{/if}</span>
+                  {/if}
+                </a>
+              </th>
+              <th>{ts}Status{/ts}</th>
+            </tr>
+            <tr class="filterrow">
+              <td></td>
+              <td>
+                <select name="f_entity_type" class="crm-filter-input" onchange="document.getElementById('filter-form').submit();">
+                  <option value="">{ts}- Any -{/ts}</option>
+                  <option value="Contact" {if $filters.entity_type == 'Contact'}selected{/if}>{ts}Contact{/ts}</option>
+                </select>
+              </td>
+              <td>
+                <input type="text" name="f_entity_id" value="{$filters.entity_id|escape}" class="crm-filter-input" placeholder="{ts}ID{/ts}" />
+              </td>
+              <td>
+                <input type="text" name="f_name" value="{$filters.name|escape}" class="crm-filter-input" placeholder="{ts}Search name...{/ts}" />
+              </td>
+              <td>
+                <div class="crm-filter-date-range">
+                  <input type="date" name="f_date_from" value="{$filters.date_from|escape}" class="crm-filter-input crm-filter-date" title="{ts}From date{/ts}" />
+                  <span class="crm-filter-date-sep">-</span>
+                  <input type="date" name="f_date_to" value="{$filters.date_to|escape}" class="crm-filter-input crm-filter-date" title="{ts}To date{/ts}" />
+                </div>
+              </td>
+              <td>
+                <select name="f_status" class="crm-filter-input" onchange="document.getElementById('filter-form').submit();">
+                  <option value="">{ts}- Any -{/ts}</option>
+                  <option value="restorable" {if $filters.status == 'restorable'}selected{/if}>{ts}Can be restored{/ts}</option>
+                  <option value="deleted" {if $filters.status == 'deleted'}selected{/if}>{ts}Permanently deleted{/ts}</option>
+                </select>
+              </td>
+            </tr>
+          </thead>
+          <tbody>
+            {if $entries}
+              {foreach from=$entries item=entry}
+                <tr class="{cycle values="odd-row,even-row"} {if !$entry.can_restore}disabled{/if}" data-audit-id="{$entry.id}" data-can-restore="{if $entry.can_restore}1{else}0{/if}">
+                  <td style="text-align: center;">
+                    <input type="checkbox" class="rollback-checkbox" name="selected_ids[]" value="{$entry.id}" 
+                           {if !$entry.can_restore}disabled title="{ts}Cannot restore - permanently deleted{/ts}"{/if}
+                           data-display-name="{$entry.display_name|escape:'htmlall'}" />
+                  </td>
+                  <td>{$entry.entity_type|escape}</td>
+                  <td>{$entry.entity_id|escape}</td>
+                  <td>
+                    {$entry.display_name|escape}
+                    {if $entry.can_restore}
+                      <br><small><a href="{crmURL p='civicrm/contact/view' q="reset=1&cid=`$entry.entity_id`"}" target="_blank">{ts}View in trash{/ts}</a></small>
+                    {/if}
+                  </td>
+                  <td>{$entry.action_date|crmDate}</td>
+                  <td>
+                    {if $entry.can_restore}
+                      <span class="crm-status-icon ok">{$entry.restore_status|escape}</span>
+                    {else}
+                      <span class="crm-status-icon error">{$entry.restore_status|escape}</span>
+                    {/if}
+                  </td>
+                </tr>
+              {/foreach}
+            {else}
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 20px;">
+                  <em>{ts}No records match the current filters.{/ts}</em>
+                </td>
+              </tr>
+            {/if}
+          </tbody>
+        </table>
+      </div>
+      <noscript>
+        <div style="margin-top: 10px;">
+          <button type="submit" class="crm-button">{ts}Apply Filters{/ts}</button>
+        </div>
+      </noscript>
+    </form>
+
+    {* Pager - bottom *}
+    {if $totalPages > 1}
+      <div class="crm-pager" style="margin-top: 10px;">
+        <div class="crm-pager-row">
+          <span class="crm-pager-nav">
+            {ts 1=$currentPage 2=$totalPages 3=$filteredCount}Page %1 of %2 (%3 records){/ts}
+          </span>
+
+          <span class="crm-pager-links">
+            {if $currentPage > 1}
+              <a href="{$baseUrl}&page={$currentPage-1}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-prev" title="{ts}Previous{/ts}">&lsaquo;</a>
+            {else}
+              <span class="crm-pager-prev disabled">&lsaquo;</span>
+            {/if}
+
+            {foreach from=$pageRange item=item}
+              {if $item.type == 'ellipsis'}
+                <span class="crm-pager-ellipsis">&hellip;</span>
+              {else}
+                {if $item.num == $currentPage}
+                  <span class="crm-pager-page current">{$item.num}</span>
+                {else}
+                  <a href="{$baseUrl}&page={$item.num}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-page">{$item.num}</a>
+                {/if}
+              {/if}
+            {/foreach}
+
+            {if $currentPage < $totalPages}
+              <a href="{$baseUrl}&page={$currentPage+1}&rp={$rowsPerPage}&sort={$sort}&dir={$sortDir}&{$filterQueryString}" class="crm-pager-next" title="{ts}Next{/ts}">&rsaquo;</a>
+            {else}
+              <span class="crm-pager-next disabled">&rsaquo;</span>
+            {/if}
+          </span>
+        </div>
+      </div>
+    {/if}
+
+    <div class="crm-submit-buttons" style="margin-top: 15px;">
+      <button type="button" class="crm-button" id="btn-rollback-selected" disabled onclick="submitRollback()">
+        <i class="crm-i fa-undo" aria-hidden="true"></i> {ts}Rollback Selected{/ts} (<span id="rollback-count">0</span>)
+      </button>
+      <a class="button cancel" href="{$settingsUrl}" style="margin-left: 10px;">
+        <span>{ts}Back to Settings{/ts}</span>
+      </a>
+    </div>
+
+    <script type="text/javascript">
+    {literal}
+    (function() {
+      var checkboxes = document.querySelectorAll('.rollback-checkbox:not([disabled])');
+      var selectAllCheckbox = document.getElementById('select-all-checkbox');
+      var selectionCount = document.getElementById('selection-count');
+      var rollbackCount = document.getElementById('rollback-count');
+      var rollbackBtn = document.getElementById('btn-rollback-selected');
+      var btnSelectAllVisible = document.getElementById('btn-select-all-visible');
+      var btnSelectAllRestorable = document.getElementById('btn-select-all-restorable');
+      var btnDeselectAll = document.getElementById('btn-deselect-all');
+
+      function getSelectedIds() {
+        var selected = document.querySelectorAll('.rollback-checkbox:checked');
+        var ids = [];
+        selected.forEach(function(cb) {
+          ids.push(cb.value);
+        });
+        return ids;
+      }
+
+      function updateSelectionCount() {
+        var selected = document.querySelectorAll('.rollback-checkbox:checked');
+        var count = selected.length;
+        selectionCount.textContent = count + ' {/literal}{ts}selected{/ts}{literal}';
+        rollbackCount.textContent = count;
+        rollbackBtn.disabled = count === 0;
+        
+        // Update select-all checkbox state
+        var enabledCheckboxes = document.querySelectorAll('.rollback-checkbox:not([disabled])');
+        var checkedEnabled = document.querySelectorAll('.rollback-checkbox:not([disabled]):checked');
+        if (enabledCheckboxes.length > 0 && checkedEnabled.length === enabledCheckboxes.length) {
+          selectAllCheckbox.checked = true;
+          selectAllCheckbox.indeterminate = false;
+        } else if (checkedEnabled.length > 0) {
+          selectAllCheckbox.checked = false;
+          selectAllCheckbox.indeterminate = true;
+        } else {
+          selectAllCheckbox.checked = false;
+          selectAllCheckbox.indeterminate = false;
+        }
+      }
+
+      // Individual checkbox change
+      checkboxes.forEach(function(cb) {
+        cb.addEventListener('change', updateSelectionCount);
+      });
+
+      // Select all checkbox in header
+      selectAllCheckbox.addEventListener('change', function() {
+        checkboxes.forEach(function(cb) {
+          cb.checked = selectAllCheckbox.checked;
+        });
+        updateSelectionCount();
+      });
+
+      // Select All Visible button
+      btnSelectAllVisible.addEventListener('click', function() {
+        checkboxes.forEach(function(cb) {
+          cb.checked = true;
+        });
+        updateSelectionCount();
+      });
+
+      // Select All Restorable button
+      btnSelectAllRestorable.addEventListener('click', function() {
+        document.querySelectorAll('.rollback-checkbox:not([disabled])').forEach(function(cb) {
+          cb.checked = true;
+        });
+        updateSelectionCount();
+      });
+
+      // Deselect All button
+      btnDeselectAll.addEventListener('click', function() {
+        document.querySelectorAll('.rollback-checkbox').forEach(function(cb) {
+          cb.checked = false;
+        });
+        updateSelectionCount();
+      });
+
+      // Submit rollback - use GET to avoid CSRF issues
+      window.submitRollback = function() {
+        var ids = getSelectedIds();
+        if (ids.length === 0) {
+          alert('{/literal}{ts}Please select at least one record to rollback.{/ts}{literal}');
+          return false;
+        }
+        if (!confirm('{/literal}{ts}Are you sure you want to restore{/ts}{literal} ' + ids.length + ' {/literal}{ts}record(s)?{/ts}{literal}')) {
+          return false;
+        }
+        // Navigate to confirm page with IDs in URL
+        var url = '{/literal}{$confirmUrl}{literal}' + '&selected_ids=' + encodeURIComponent(ids.join(','));
+        window.location.href = url;
+      };
+
+      // Initialize count
+      updateSelectionCount();
+    })();
+    {/literal}
+    </script>
+  {else}
+    <div class="messages status no-popup">
+      <p><i class="crm-i fa-info-circle" aria-hidden="true"></i> {ts}There are no records available for rollback. This could mean:{/ts}</p>
+      <ul style="margin-left: 20px; margin-top: 5px;">
+        <li>{ts}No records have been deleted by the data retention policy yet{/ts}</li>
+        <li>{ts}All previously deleted records have already been rolled back{/ts}</li>
+        <li>{ts}All deleted records have been permanently purged from the database{/ts}</li>
+      </ul>
+    </div>
+
+    <div class="crm-submit-buttons">
+      <a class="button" href="{$settingsUrl}">
+        <span>{ts}Back to Settings{/ts}</span>
+      </a>
+    </div>
+  {/if}
+</div>
+
+{literal}
+<style>
+  tr.disabled td {
+    color: #999;
+    background-color: #f5f5f5;
+  }
+  .crm-status-icon.ok {
+    color: #0a0;
+  }
+  .crm-status-icon.error {
+    color: #c00;
+  }
+
+  /* Pager styles */
+  .crm-pager {
+    padding: 8px 0;
+    font-size: 13px;
+  }
+  .crm-pager-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .crm-pager-rpp {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .crm-pager-rpp select {
+    padding: 3px 8px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+  }
+  .crm-pager-nav {
+    color: #666;
+  }
+  .crm-pager-links {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .crm-pager-links a,
+  .crm-pager-links span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    text-decoration: none;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    color: #333;
+    background: #fff;
+  }
+  .crm-pager-links a:hover {
+    background: #f0f0f0;
+    border-color: #bbb;
+  }
+  .crm-pager-links .current {
+    background: #0073aa;
+    color: #fff;
+    border-color: #0073aa;
+    font-weight: bold;
+  }
+  .crm-pager-links .disabled {
+    color: #ccc;
+    cursor: not-allowed;
+  }
+  .crm-pager-ellipsis {
+    border: none !important;
+    background: transparent !important;
+  }
+  .crm-pager-prev,
+  .crm-pager-next {
+    font-size: 16px;
+    font-weight: bold;
+  }
+
+  /* Sortable column styles */
+  .crm-sortable-table th.crm-sortable {
+    cursor: pointer;
+  }
+  .crm-sortable-table th.crm-sortable a {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .crm-sortable-table th.crm-sortable a:hover {
+    color: #0073aa;
+  }
+  .crm-sortable-table th.crm-sortable.sorted {
+    background-color: #f5f5f5;
+  }
+  .crm-sort-icon {
+    font-size: 10px;
+    color: #666;
+  }
+
+  /* Filter row styles */
+  .crm-filterable-table .filterrow {
+    background-color: #f9f9f9;
+  }
+  .crm-filterable-table .filterrow td {
+    padding: 5px 8px;
+    border-bottom: 2px solid #ddd;
+  }
+  .crm-filter-input {
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 12px;
+    box-sizing: border-box;
+  }
+  .crm-filter-input:focus {
+    border-color: #0073aa;
+    outline: none;
+    box-shadow: 0 0 3px rgba(0, 115, 170, 0.3);
+  }
+  .crm-filter-date-range {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .crm-filter-date {
+    flex: 1;
+    min-width: 0;
+  }
+  .crm-filter-date-sep {
+    color: #666;
+    flex-shrink: 0;
+  }
+  .crm-clear-filters {
+    margin-left: auto;
+  }
+  .crm-clear-filters span {
+    font-size: 12px;
+  }
+</style>
+{/literal}
+
+{literal}
+<script type="text/javascript">
+(function() {
+  // Auto-submit on text input change with debounce
+  var textInputs = document.querySelectorAll('.crm-filter-input[type="text"], .crm-filter-input[type="date"]');
+  
+  textInputs.forEach(function(input) {
+    input.addEventListener('change', function() {
+      document.getElementById('filter-form').submit();
+    });
+    
+    // For text inputs, also handle Enter key
+    if (input.type === 'text') {
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          document.getElementById('filter-form').submit();
+        }
+      });
+    }
+  });
+})();
+</script>
+{/literal}

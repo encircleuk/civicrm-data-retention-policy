@@ -8,6 +8,7 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     'data_retention_contact_years' => 'contact',
     'data_retention_contact_unit' => 'contact',
     'data_retention_contact_date_source' => 'contact',
+    'data_retention_cms_user_handling' => 'contact',
     'data_retention_contact_trash_days' => 'contact_trash',
     'data_retention_contact_trash_unit' => 'contact_trash',
     'data_retention_participant_years' => 'participant',
@@ -17,6 +18,8 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     'data_retention_membership_years' => 'membership',
     'data_retention_membership_unit' => 'membership',
     'data_retention_clean_orphan_custom_data' => 'custom_data',
+    'data_retention_protect_default_org_contacts' => 'protection',
+    'data_retention_excluded_contact_ids' => 'protection',
     'data_retention_audit_log_years' => 'audit_log',
     'data_retention_audit_log_unit' => 'audit_log',
   ];
@@ -45,10 +48,10 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     }
 
     $this->assign('entityDefinitions', $definitions);
+    $this->assign('rollbackPreviewUrl', CRM_Utils_System::url('civicrm/admin/dataretentionpolicy/rollback/preview', 'reset=1'));
 
     $this->addButtons([
       ['type' => 'submit', 'name' => E::ts('Save'), 'isDefault' => TRUE],
-      ['type' => 'submit', 'name' => E::ts('Rollback deletions'), 'subName' => 'rollback'],
       ['type' => 'cancel', 'name' => E::ts('Cancel')],
     ]);
   }
@@ -63,11 +66,6 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
   }
 
   public function postProcess() {
-    if (!empty($this->_submitValues['_qf_Settings_next_rollback'])) {
-      $this->processRollback();
-      return;
-    }
-
     $values = $this->exportValues();
     $settings = Civi::settings();
 
@@ -104,26 +102,6 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     CRM_Core_Session::setStatus(E::ts('Data retention policy settings have been saved.'), E::ts('Saved'), 'success');
   }
 
-  protected function processRollback() {
-    $processor = new CRM_DataRetentionPolicy_Service_RetentionProcessor();
-    $restored = $processor->rollbackDeletions();
-
-    if ($restored > 0) {
-      CRM_Core_Session::setStatus(
-        E::ts('Restored %1 records from the data retention audit log.', [1 => $restored]),
-        E::ts('Rollback complete'),
-        'success'
-      );
-    }
-    else {
-      CRM_Core_Session::setStatus(
-        E::ts('There were no deletions available to restore.'),
-        E::ts('Rollback complete'),
-        'info'
-      );
-    }
-  }
-
   protected function getEntityDefinitions() {
     return [
       'data_retention_contact_years' => [
@@ -149,6 +127,18 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
         ],
         'value_type' => 'string',
         'default' => 'activity',
+      ],
+      'data_retention_cms_user_handling' => [
+        'label' => E::ts('CMS user account handling'),
+        'description' => E::ts('Control how contacts with linked CMS user accounts (Drupal, WordPress, etc.) are handled. "Skip" will exclude these contacts from deletion. "Delete both" will delete the CMS user account along with the contact. "Delete contact only" will remove the CiviCRM contact but preserve the CMS user account.'),
+        'input_type' => 'select',
+        'options' => [
+          'skip' => E::ts('Skip - never delete contacts with CMS user accounts'),
+          'delete_both' => E::ts('Delete both - remove contact and CMS user'),
+          'delete_contact_keep_user' => E::ts('Delete contact only - preserve CMS user account'),
+        ],
+        'value_type' => 'string',
+        'default' => 'skip',
       ],
       'data_retention_contact_trash_days' => [
         'label' => E::ts('Contacts in trash (amount)'),
@@ -207,6 +197,19 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
         'description' => E::ts('Remove orphaned rows from custom data tables each time the scheduled job runs.'),
         'input_type' => 'checkbox',
         'value_type' => 'boolean',
+      ],
+      'data_retention_protect_default_org_contacts' => [
+        'label' => E::ts('Protect Default Organisation related contacts'),
+        'description' => E::ts('When enabled, contacts with active relationships to the Default Organisation will be excluded from retention processing. The Default Organisation contact itself is always protected regardless of this setting.'),
+        'input_type' => 'checkbox',
+        'value_type' => 'boolean',
+      ],
+      'data_retention_excluded_contact_ids' => [
+        'label' => E::ts('Excluded contact IDs'),
+        'description' => E::ts('Enter a comma-separated list of contact IDs that should never be deleted by the retention policy (e.g. 1,5,42). These contacts are protected in addition to the Default Organisation.'),
+        'attributes' => ['size' => 40, 'maxlength' => 255],
+        'value_type' => 'string',
+        'default' => '',
       ],
       'data_retention_audit_log_years' => [
         'label' => E::ts('Audit log records (amount)'),

@@ -10,4 +10,21 @@
     <is_public>0</is_public>
     <is_active>1</is_active>
   </item>
+  <item>
+    <path>civicrm/admin/dataretentionpolicy/rollback/preview</path>
+    <page_callback>CRM_DataRetentionPolicy_Page_RollbackPreview</page_callback>
+    <title>Rollback Preview</title>
+    <access_arguments>administer CiviCRM</access_arguments>
+    <is_public>0</is_public>
+    <is_active>1</is_active>
+  </item>
+  <item>
+    <path>civicrm/admin/dataretentionpolicy/rollback/confirm</path>
+    <page_callback>CRM_DataRetentionPolicy_Form_RollbackConfirm</page_callback>
+    <title>Confirm Rollback</title>
+    <access_arguments>administer CiviCRM</access_arguments>
+    <page_type>Form</page_type>
+    <is_public>0</is_public>
+    <is_active>1</is_active>
+  </item>
 </menu>
