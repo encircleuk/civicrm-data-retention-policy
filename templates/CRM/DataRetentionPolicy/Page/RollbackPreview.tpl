@@ -1,5 +1,6 @@
 <div class="crm-block crm-content-block">
   <style>
+    {literal}
     .rollback-checkbox:checked + td,
     tr:has(.rollback-checkbox:checked) {
       background-color: #e8f4fc !important;
@@ -24,6 +25,7 @@
     tr.disabled td {
       opacity: 0.6;
     }
+    {/literal}
   </style>
   <div class="messages status no-popup">
     <p><strong>{ts}Rollback Preview{/ts}</strong></p>
