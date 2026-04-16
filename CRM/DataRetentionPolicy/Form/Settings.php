@@ -20,7 +20,7 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     'data_retention_membership_unit' => 'membership',
     'data_retention_clean_orphan_custom_data' => 'custom_data',
     'data_retention_protect_default_org_contacts' => 'protection',
-    'data_retention_excluded_contact_ids' => 'protection',
+    'data_retention_excluded_groups' => 'protection',
     'data_retention_audit_log_years' => 'audit_log',
     'data_retention_audit_log_unit' => 'audit_log',
     'data_retention_batch_size' => 'job_settings',
@@ -35,6 +35,9 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
       switch ($inputType) {
         case 'select':
           $this->add('select', $key, $definition['label'], CRM_Utils_Array::value('options', $definition, []));
+          break;
+        case 'multiselect':
+          $this->add('select', $key, $definition['label'], CRM_Utils_Array::value('options', $definition, []), FALSE, ['multiple' => 'multiple', 'class' => 'crm-select2 huge']);
           break;
         case 'checkbox':
           $this->add('checkbox', $key, $definition['label']);
@@ -83,6 +86,14 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
           if (!array_key_exists($value, $options)) {
             $value = CRM_Utils_Array::value('default', $definition, '');
           }
+          break;
+
+        case 'array':
+          $value = CRM_Utils_Array::value($setting, $values, []);
+          if (!is_array($value)) {
+            $value = [];
+          }
+          $value = array_map('intval', array_filter($value));
           break;
 
         case 'boolean':
@@ -213,12 +224,13 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
         'input_type' => 'checkbox',
         'value_type' => 'boolean',
       ],
-      'data_retention_excluded_contact_ids' => [
-        'label' => E::ts('Excluded contact IDs'),
-        'description' => E::ts('Enter a comma-separated list of contact IDs that should never be deleted by the retention policy (e.g. 1,5,42). These contacts are protected in addition to the Default Organisation.'),
-        'attributes' => ['size' => 40, 'maxlength' => 255],
-        'value_type' => 'string',
-        'default' => '',
+      'data_retention_excluded_groups' => [
+        'label' => E::ts('Excluded groups'),
+        'description' => E::ts('Select one or more CiviCRM groups whose members should never be deleted by the retention policy (e.g. API users, service accounts, super admins). Members of these groups are protected in addition to the Default Organisation.'),
+        'input_type' => 'multiselect',
+        'options' => $this->getGroupOptions(),
+        'value_type' => 'array',
+        'default' => [],
       ],
       'data_retention_audit_log_years' => [
         'label' => E::ts('Audit log records (amount)'),
@@ -248,6 +260,26 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
       'month' => E::ts('Months'),
       'year' => E::ts('Years'),
     ];
+  }
+
+  protected function getGroupOptions() {
+    $options = [];
+    try {
+      $result = civicrm_api3('Group', 'get', [
+        'is_active' => 1,
+        'options' => ['limit' => 0, 'sort' => 'title ASC'],
+        'return' => ['id', 'title'],
+      ]);
+      foreach ($result['values'] as $group) {
+        $options[$group['id']] = $group['title'];
+      }
+    }
+    catch (CiviCRM_API3_Exception $e) {
+      Civi::log()->error('Data Retention Policy: failed to load groups', [
+        'message' => $e->getMessage(),
+      ]);
+    }
+    return $options;
   }
 
 }

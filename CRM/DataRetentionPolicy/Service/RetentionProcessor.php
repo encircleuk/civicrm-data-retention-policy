@@ -1020,14 +1020,17 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
       }
     }
 
-    // Also check for any explicitly excluded contact IDs from settings.
-    $explicitExclusions = $settings->get('data_retention_excluded_contact_ids');
-    if (!empty($explicitExclusions)) {
-      if (is_string($explicitExclusions)) {
-        $explicitExclusions = array_filter(array_map('intval', explode(',', $explicitExclusions)));
-      }
-      if (is_array($explicitExclusions)) {
-        $protectedIds = array_merge($protectedIds, $explicitExclusions);
+    // Exclude members of selected CiviCRM groups.
+    $excludedGroups = $settings->get('data_retention_excluded_groups');
+    if (!empty($excludedGroups) && is_array($excludedGroups)) {
+      $groupIds = array_map('intval', array_filter($excludedGroups));
+      if (!empty($groupIds)) {
+        $groupIdList = implode(',', $groupIds);
+        $sql = "SELECT DISTINCT contact_id FROM civicrm_group_contact WHERE group_id IN ({$groupIdList}) AND status = 'Added'";
+        $dao = CRM_Core_DAO::executeQuery($sql);
+        while ($dao->fetch()) {
+          $protectedIds[] = (int) $dao->contact_id;
+        }
       }
     }
 

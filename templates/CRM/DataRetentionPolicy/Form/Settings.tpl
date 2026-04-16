@@ -17,7 +17,7 @@
 
 <div class="messages status no-popup">
   <p><strong>{ts}Default Organisation Protection{/ts}</strong></p>
-  <p>{ts}The Default Organisation contact (configured in CiviCRM domain settings) is always protected and will never be deleted by the retention policy. You can also protect contacts related to the Default Organisation and specify additional contact IDs to exclude in the settings below.{/ts}</p>
+  <p>{ts}The Default Organisation contact (configured in CiviCRM domain settings) is always protected and will never be deleted by the retention policy. You can also protect contacts related to the Default Organisation and exclude members of specific groups in the settings below.{/ts}</p>
 </div>
 
 <div class="crm-block crm-form-block">

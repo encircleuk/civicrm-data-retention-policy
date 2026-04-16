@@ -98,12 +98,13 @@ return [
     'description' => E::ts('When enabled, contacts with active relationships to the Default Organisation will be excluded from retention processing. The Default Organisation contact is always protected.'),
     'default' => 1,
   ],
-  'data_retention_excluded_contact_ids' => [
-    'name' => 'data_retention_excluded_contact_ids',
-    'type' => 'String',
-    'title' => E::ts('Excluded contact IDs'),
-    'description' => E::ts('Comma-separated list of contact IDs that should never be deleted by the retention policy. These contacts are protected in addition to the Default Organisation.'),
-    'default' => '',
+  'data_retention_excluded_groups' => [
+    'name' => 'data_retention_excluded_groups',
+    'type' => 'Array',
+    'serialize' => CRM_Core_DAO::SERIALIZE_JSON,
+    'title' => E::ts('Excluded groups'),
+    'description' => E::ts('CiviCRM groups whose members should never be deleted by the retention policy. Members of these groups are protected in addition to the Default Organisation.'),
+    'default' => [],
   ],
   'data_retention_cms_user_handling' => [
     'name' => 'data_retention_cms_user_handling',
