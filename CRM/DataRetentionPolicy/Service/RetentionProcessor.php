@@ -2,28 +2,36 @@
 
 class CRM_DataRetentionPolicy_Service_RetentionProcessor {
 
-  public function applyPolicies() {
+  public function applyPolicies($batchSize = 0) {
     $settings = Civi::settings();
     $results = [];
 
-    $this->logAction('job_start', 'DataRetentionPolicyJob', NULL, ['time' => date('c')]);
+    $batchSize = (int) $batchSize;
+    if ($batchSize <= 0) {
+      $batchSize = (int) $settings->get('data_retention_batch_size');
+    }
+
+    $this->logAction('job_start', 'DataRetentionPolicyJob', NULL, [
+      'time' => date('c'),
+      'batch_size' => $batchSize,
+    ]);
 
     foreach ($this->getEntityConfigurations($settings) as $config) {
       $amount = (int) $settings->get($config['amount_setting']);
       $unit = $settings->get($config['unit_setting']);
       if ($amount <= 0) {
-        $results[$config['entity']] = 0;
+        $results[$config['entity']] = ['deleted' => 0, 'remaining' => 0];
         continue;
       }
 
       $cutoff = $this->calculateCutoffDate($amount, $unit);
       if ($cutoff === NULL) {
-        $results[$config['entity']] = 0;
+        $results[$config['entity']] = ['deleted' => 0, 'remaining' => 0];
         continue;
       }
 
-      $count = $this->deleteExpiredRecords($config, $cutoff);
-      $results[$config['entity']] = $count;
+      $result = $this->deleteExpiredRecords($config, $cutoff, $batchSize);
+      $results[$config['entity']] = $result;
     }
 
     if ($this->shouldCleanCustomData($settings)) {
@@ -39,8 +47,16 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
     return $results;
   }
 
-  protected function deleteExpiredRecords(array $config, DateTime $cutoff) {
-    $ids = $this->getIdsToDelete($config, $cutoff);
+  protected function deleteExpiredRecords(array $config, DateTime $cutoff, $batchSize = 0) {
+    $fetchLimit = ($batchSize > 0) ? $batchSize + 1 : 0;
+    $ids = $this->getIdsToDelete($config, $cutoff, $fetchLimit);
+
+    $hasMore = FALSE;
+    if ($batchSize > 0 && count($ids) > $batchSize) {
+      $hasMore = TRUE;
+      $ids = array_slice($ids, 0, $batchSize);
+    }
+
     $count = 0;
     foreach ($ids as $id) {
       $snapshot = $this->getRecordSnapshot($config['api_entity'], $id);
@@ -91,10 +107,16 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
         ]);
       }
     }
-    return $count;
+
+    $remaining = 0;
+    if ($hasMore) {
+      $remaining = $this->countIdsToDelete($config, $cutoff);
+    }
+
+    return ['deleted' => $count, 'remaining' => $remaining];
   }
 
-  protected function getIdsToDelete(array $config, DateTime $cutoff) {
+  protected function getIdsToDelete(array $config, DateTime $cutoff, $limit = 0) {
     $params = [1 => [$cutoff->format('Y-m-d H:i:s'), 'String']];
     $sql = sprintf(
       'SELECT %s AS record_id FROM %s WHERE %s IS NOT NULL AND %s < %%1 AND %s',
@@ -105,12 +127,30 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
       $config['additional_where']
     );
 
+    if ($limit > 0) {
+      $sql .= ' LIMIT ' . (int) $limit;
+    }
+
     $dao = CRM_Core_DAO::executeQuery($sql, $params);
     $ids = [];
     while ($dao->fetch()) {
       $ids[] = $dao->record_id;
     }
     return $ids;
+  }
+
+  protected function countIdsToDelete(array $config, DateTime $cutoff) {
+    $params = [1 => [$cutoff->format('Y-m-d H:i:s'), 'String']];
+    $sql = sprintf(
+      'SELECT COUNT(%s) FROM %s WHERE %s IS NOT NULL AND %s < %%1 AND %s',
+      $config['id_field'],
+      $config['table'],
+      $config['date_expression'],
+      $config['date_expression'],
+      $config['additional_where']
+    );
+
+    return (int) CRM_Core_DAO::singleValueQuery($sql, $params);
   }
 
   protected function getEntityConfigurations($settings = NULL) {

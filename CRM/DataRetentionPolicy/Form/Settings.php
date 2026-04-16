@@ -22,6 +22,7 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     'data_retention_excluded_contact_ids' => 'protection',
     'data_retention_audit_log_years' => 'audit_log',
     'data_retention_audit_log_unit' => 'audit_log',
+    'data_retention_batch_size' => 'job_settings',
   ];
 
   public function buildQuickForm() {
@@ -223,6 +224,11 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
         'options' => $this->getIntervalUnitOptions(),
         'value_type' => 'string',
         'default' => 'month',
+      ],
+      'data_retention_batch_size' => [
+        'label' => E::ts('Batch size per entity type'),
+        'description' => E::ts('Maximum number of records to delete per entity type during each scheduled job run. Set to 0 for no limit. Default is 50. If more records remain after a run, they will be processed on the next scheduled execution.'),
+        'value_type' => 'integer',
       ],
     ];
   }

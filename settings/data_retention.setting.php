@@ -126,4 +126,11 @@ return [
     'description' => E::ts('Time unit for audit log retention.'),
     'default' => 'month',
   ],
+  'data_retention_batch_size' => [
+    'name' => 'data_retention_batch_size',
+    'type' => 'Integer',
+    'title' => E::ts('Batch size per entity type'),
+    'description' => E::ts('Maximum number of records to delete per entity type during each scheduled job run. Use 0 for no limit (process all matching records). A lower value reduces the risk of PHP execution timeouts on large datasets.'),
+    'default' => 50,
+  ],
 ];
