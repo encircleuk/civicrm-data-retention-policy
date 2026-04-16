@@ -9,6 +9,7 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
     'data_retention_contact_unit' => 'contact',
     'data_retention_contact_date_source' => 'contact',
     'data_retention_cms_user_handling' => 'contact',
+    'data_retention_cms_reassign_user_id' => 'contact',
     'data_retention_contact_trash_days' => 'contact_trash',
     'data_retention_contact_trash_unit' => 'contact_trash',
     'data_retention_participant_years' => 'participant',
@@ -120,11 +121,12 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
       ],
       'data_retention_contact_date_source' => [
         'label' => E::ts('Contact retention date source'),
-        'description' => E::ts('Select whether contacts should be evaluated using their last recorded activity or their last login date.'),
+        'description' => E::ts('Select whether contacts should be evaluated using their last recorded activity, their last login date, or both (login date with activity date as fallback).'),
         'input_type' => 'select',
         'options' => [
           'activity' => E::ts('Last activity date'),
           'login' => E::ts('Last login date (from CMS account)'),
+          'both' => E::ts('Both (login date, fallback to activity date)'),
         ],
         'value_type' => 'string',
         'default' => 'activity',
@@ -140,6 +142,12 @@ class CRM_DataRetentionPolicy_Form_Settings extends CRM_Core_Form {
         ],
         'value_type' => 'string',
         'default' => 'skip',
+      ],
+      'data_retention_cms_reassign_user_id' => [
+        'label' => E::ts('Reassign content to user ID'),
+        'description' => E::ts('When a CMS user account is deleted, reassign their content (posts, pages, etc.) to this CMS user ID. Leave empty to delete all content with the user. Applies to WordPress and Drupal.'),
+        'value_type' => 'integer',
+        'default' => '',
       ],
       'data_retention_contact_trash_days' => [
         'label' => E::ts('Contacts in trash (amount)'),

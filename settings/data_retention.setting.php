@@ -25,7 +25,7 @@ return [
     'name' => 'data_retention_contact_date_source',
     'type' => 'String',
     'title' => E::ts('Contact retention date source'),
-    'description' => E::ts('Choose whether contacts are evaluated using their last activity date or their last login date when determining deletion.'),
+    'description' => E::ts('Choose whether contacts are evaluated using their last activity date, last login date, or both (login with activity fallback) when determining deletion.'),
     'default' => 'activity',
   ],
   'data_retention_contact_trash_days' => [
@@ -111,6 +111,13 @@ return [
     'title' => E::ts('CMS user account handling'),
     'description' => E::ts('Control how contacts with linked CMS user accounts (Drupal, WordPress, etc.) are handled during retention processing. "Skip" will not delete contacts with CMS accounts. "Delete both" will delete the contact AND the CMS user account. "Delete contact only" will delete the contact but preserve the CMS user account (the link in civicrm_uf_match will be removed).'),
     'default' => 'skip',
+  ],
+  'data_retention_cms_reassign_user_id' => [
+    'name' => 'data_retention_cms_reassign_user_id',
+    'type' => 'Integer',
+    'title' => E::ts('CMS content reassignment user ID'),
+    'description' => E::ts('When a CMS user account is deleted, reassign their content to this CMS user ID. Leave empty to delete content with the user.'),
+    'default' => NULL,
   ],
   'data_retention_audit_log_years' => [
     'name' => 'data_retention_audit_log_years',

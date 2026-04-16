@@ -70,7 +70,8 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
         $cmsUserUnlinked = FALSE;
         if ($config['api_entity'] === 'Contact' && !empty($config['cms_user_handling'])) {
           if ($config['cms_user_handling'] === 'delete_both') {
-            $cmsUserDeleted = $this->deleteCmsUserForContact($id);
+            $reassignId = !empty($config['cms_reassign_user_id']) ? (int) $config['cms_reassign_user_id'] : NULL;
+            $cmsUserDeleted = $this->deleteCmsUserForContact($id, $reassignId);
           }
           elseif ($config['cms_user_handling'] === 'delete_contact_keep_user') {
             // Unlink the CMS user from the contact but preserve the CMS account.
@@ -159,20 +160,30 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
     }
 
     $contactDateSource = $settings->get('data_retention_contact_date_source');
-    if ($contactDateSource !== 'login') {
+    if (!in_array($contactDateSource, ['login', 'both'], TRUE)) {
       $contactDateSource = 'activity';
     }
     // Subquery to get max activity date for the contact
     $lastActivitySubquery = '(SELECT MAX(a.activity_date_time) FROM civicrm_activity_contact ac INNER JOIN civicrm_activity a ON ac.activity_id = a.id WHERE ac.contact_id = civicrm_contact.id)';
+    $loginSubquery = '(SELECT MAX(log_date) FROM civicrm_uf_match uf WHERE uf.contact_id = civicrm_contact.id)';
     $contactDateExpression = "COALESCE({$lastActivitySubquery}, modified_date, created_date)";
     if ($contactDateSource === 'login') {
-      $contactDateExpression = "COALESCE((SELECT MAX(log_date) FROM civicrm_uf_match uf WHERE uf.contact_id = civicrm_contact.id), {$lastActivitySubquery}, modified_date, created_date)";
+      $contactDateExpression = "COALESCE({$loginSubquery}, modified_date, created_date)";
+    }
+    elseif ($contactDateSource === 'both') {
+      $contactDateExpression = "COALESCE({$loginSubquery}, {$lastActivitySubquery}, modified_date, created_date)";
     }
 
     // Determine CMS user handling strategy.
     $cmsUserHandling = $settings->get('data_retention_cms_user_handling');
     if (!in_array($cmsUserHandling, ['skip', 'delete_both', 'delete_contact_keep_user'], TRUE)) {
       $cmsUserHandling = 'skip';
+    }
+
+    // Get the CMS user ID to reassign content to when deleting CMS users.
+    $cmsReassignUserId = (int) $settings->get('data_retention_cms_reassign_user_id');
+    if ($cmsReassignUserId <= 0) {
+      $cmsReassignUserId = NULL;
     }
 
     // Get exclusion lists for protected contacts.
@@ -207,6 +218,7 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
         'date_expression' => $contactDateExpression,
         'additional_where' => $contactAdditionalWhere,
         'cms_user_handling' => $cmsUserHandling,
+        'cms_reassign_user_id' => $cmsReassignUserId,
       ],
       [
         'amount_setting' => 'data_retention_contact_trash_days',
@@ -219,6 +231,7 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
         'additional_where' => $trashAdditionalWhere,
         'api_params' => ['skip_undelete' => 1],
         'cms_user_handling' => $cmsUserHandling,
+        'cms_reassign_user_id' => $cmsReassignUserId,
       ],
       [
         'amount_setting' => 'data_retention_participant_years',
@@ -814,10 +827,14 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
    * @param int $contactId
    *   The CiviCRM contact ID.
    *
+   * @param int|null $reassignUserId
+   *   Optional CMS user ID to reassign content to when deleting. Applies to
+   *   WordPress and Drupal.
+   *
    * @return bool
    *   TRUE if a CMS user was deleted, FALSE otherwise.
    */
-  protected function deleteCmsUserForContact($contactId) {
+  protected function deleteCmsUserForContact($contactId, $reassignUserId = NULL) {
     $sql = 'SELECT uf_id FROM civicrm_uf_match WHERE contact_id = %1';
     $dao = CRM_Core_DAO::executeQuery($sql, [1 => [(int) $contactId, 'Integer']]);
 
@@ -844,32 +861,50 @@ class CRM_DataRetentionPolicy_Service_RetentionProcessor {
         }
         elseif (defined('DRUPAL_ROOT') && function_exists('user_delete')) {
           // Drupal 7 fallback.
+          if ($reassignUserId) {
+            // Reassign content before deleting the user in Drupal 7.
+            db_update('node')->fields(['uid' => $reassignUserId])->condition('uid', $ufId)->execute();
+          }
           user_delete($ufId);
           $deleted = TRUE;
           Civi::log()->info('Data Retention Policy deleted Drupal user via user_delete', [
             'contact_id' => $contactId,
             'uf_id' => $ufId,
+            'reassign_to' => $reassignUserId,
           ]);
         }
         elseif (defined('DRUPAL_ROOT') && class_exists('\\Drupal\\user\\Entity\\User')) {
           // Drupal 8/9/10 fallback.
           $user = \Drupal\user\Entity\User::load($ufId);
           if ($user) {
+            if ($reassignUserId && \Drupal::entityTypeManager()->getStorage('node')) {
+              // Reassign content before deleting the user in Drupal 8+.
+              $nids = \Drupal::entityQuery('node')->condition('uid', $ufId)->accessCheck(FALSE)->execute();
+              if (!empty($nids)) {
+                $nodes = \Drupal\node\Entity\Node::loadMultiple($nids);
+                foreach ($nodes as $node) {
+                  $node->setOwnerId($reassignUserId);
+                  $node->save();
+                }
+              }
+            }
             $user->delete();
             $deleted = TRUE;
             Civi::log()->info('Data Retention Policy deleted Drupal user via Entity API', [
               'contact_id' => $contactId,
               'uf_id' => $ufId,
+              'reassign_to' => $reassignUserId,
             ]);
           }
         }
         elseif (defined('ABSPATH') && function_exists('wp_delete_user')) {
-          // WordPress fallback.
-          wp_delete_user($ufId);
+          // WordPress fallback. Second parameter reassigns content to another user.
+          wp_delete_user($ufId, $reassignUserId);
           $deleted = TRUE;
           Civi::log()->info('Data Retention Policy deleted WordPress user', [
             'contact_id' => $contactId,
             'uf_id' => $ufId,
+            'reassign_to' => $reassignUserId,
           ]);
         }
         else {
